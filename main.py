@@ -29,8 +29,8 @@ def start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     username = update.message.from_user.username
     full_name = update.message.from_user.full_name
-
-    if not user_list:
+    
+    if not user:
         user_db.insert({
             "chat_id": chat_id,
             "username": username,
