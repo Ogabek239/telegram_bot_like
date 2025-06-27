@@ -12,42 +12,31 @@ from telegram import (
 
 from dotenv import load_dotenv
 import os
-
-import json
+from tinydb import TinyDB, Query
 
 load_dotenv()
 token = os.getenv("token")
 
-updater = Updater(token=token)
-dispatcher = updater.dispatcher
+count_db = TinyDB("count_db.json")
+user_db = TinyDB("user_db.json")
 
-with open("count.json", "r") as f:
+User = Query()
 
-    try:
-        count = json.loads(f.read())
-    except:
-        count = {"like": 0, "dislike": 0}
-
-g_dislike = count["dislike"]
-d_like = count["like"]
-
-with open("text.json", "r") as f:
-    try:
-        dct = json.loads(f.read())
-    except:
-        dct = {}
-
+if not count_db:
+    count_db.insert({"like": 0, "dislike": 0})
 
 def start(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     username = update.message.from_user.username
     full_name = update.message.from_user.full_name
 
-    if str(chat_id) not in dct:
-        dct[str(chat_id)] = {
+    if not user_list:
+        user_db.insert({
+            "chat_id": chat_id,
             "username": username,
             "full_name": full_name,
-        }
+            "choice": None
+        })
     bot = context.bot
 
     keyboard1 = InlineKeyboardButton(
@@ -77,8 +66,15 @@ def query(update: Update, context: CallbackContext):
         else:
             return
 
-        previous_dict:dict = dct.get(str(chat_id), None)
-        previous_choice = previous_dict.get('choice', None)
+        for user1 in user_db:
+            if user1["chat_id"] == chat_id:
+                user = user1
+            return
+
+
+        
+        user = user_list[0]
+        previous_choice = user.get("choice")
 
         if previous_choice == current_choice:
             return
@@ -93,15 +89,10 @@ def query(update: Update, context: CallbackContext):
         else:
             g_dislike += 1
 
-        with open("count.json", "w") as f:
-            json_string = json.dumps({"like": d_like, "dislike": g_dislike})
-            f.write(json_string)
+        count_db.truncate()
+        count_db.insert({"like": d_like, "dislike": g_dislike})
 
-        dct[str(chat_id)]['choice'] = current_choice
-
-        with open("text.json", "w") as f:
-            json_string = json.dumps(dct)
-            f.write(json_string)
+        user_db.update({"choice": current_choice}, lambda u: u["chat_id"] == chat_id)
 
         keyboard1 = InlineKeyboardButton(
             f"dislike 👎 {g_dislike}", callback_data="1dislike"
@@ -112,6 +103,8 @@ def query(update: Update, context: CallbackContext):
         update.callback_query.edit_message_reply_markup(reply_markup=reply_markup)
 
 
+updater = Updater(token=token)
+dispatcher = updater.dispatcher
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CallbackQueryHandler(callback=query, pattern="1"))
 
